@@ -102,6 +102,10 @@ class PikachuEnv(LeggedRobot):
             idx("right_ankle_joint"),
         )
 
+        # print("Reference joint indices:")
+        # print(f"Left leg: hip_pitch={self.left_ref_joint_indices[0]}, knee={self.left_ref_joint_indices[1]}, ankle={self.left_ref_joint_indices[2]}")
+        # print(f"Right leg: hip_pitch={self.right_ref_joint_indices[0]}, knee={self.right_ref_joint_indices[1]}, ankle={self.right_ref_joint_indices[2]}")
+      
         # Default-joint reward explicitly constrains yaw and roll.
         self.left_yaw_roll_indices = (
             idx("left_hip_yaw_joint"),

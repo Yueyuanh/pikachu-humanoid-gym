@@ -74,7 +74,17 @@ def play(args):
 
     # load policy
     train_cfg.runner.resume = True
-    ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
+    try:
+        ppo_runner, train_cfg = task_registry.make_alg_runner(
+            env=env, name=args.task, args=args, train_cfg=train_cfg
+        )
+    except ValueError as e:
+        print(f"WARNING - Resume failed: {e}")
+        print("WARNING - Falling back to non-resume mode (random/untrained policy).")
+        train_cfg.runner.resume = False
+        ppo_runner, train_cfg = task_registry.make_alg_runner(
+            env=env, name=args.task, args=args, train_cfg=train_cfg
+        )
     policy = ppo_runner.get_inference_policy(device=env.device)
     
     # export policy as a jit module (used to run it from C++)
@@ -86,7 +96,11 @@ def play(args):
     logger = Logger(env.dt)
     robot_index = 0 # which robot is used for logging
     joint_index = 1 # which joint is used for logging
-    stop_state_log = 1200 # number of steps before plotting states
+    plot_steps = 200   # adjustable: plot first N steps
+    total_steps = 1200 # adjustable: total play steps
+    # Ensure at least one full episode finishes so reward stats are available.
+    total_steps = max(total_steps, int(getattr(env, "max_episode_length", 0)) + 1)
+    plot_done = False
     if RENDER:
         camera_properties = gymapi.CameraProperties()
         camera_properties.width = 1920
@@ -112,7 +126,8 @@ def play(args):
             os.mkdir(experiment_dir)
         video = cv2.VideoWriter(dir, fourcc, 50.0, (1920, 1080))
 
-    for i in tqdm(range(stop_state_log)):
+    # for i in tqdm(range(total_steps)):
+    for i in range(total_steps):
 
         actions = policy(obs.detach()) # * 0.
         
@@ -150,13 +165,17 @@ def play(args):
             }
             )
         # ====================== Log states ======================
-        if infos["episode"]:
-            num_episodes = torch.sum(env.reset_buf).item()
-            if num_episodes>0:
-                logger.log_rewards(infos["episode"], num_episodes)
+        episode_info = infos.get("episode", None)
+        if episode_info:
+            num_episodes = int(torch.sum(dones).item())
+            if num_episodes > 0:
+                logger.log_rewards(episode_info, num_episodes)
+
+        if (not plot_done) and (i + 1 >= plot_steps):
+            logger.plot_states(show=True)
+            plot_done = True
 
     logger.print_rewards()
-    logger.plot_states()
     
     if RENDER:
         video.release()

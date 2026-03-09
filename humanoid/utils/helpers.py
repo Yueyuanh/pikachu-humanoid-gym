@@ -118,31 +118,62 @@ def launch_tensorboard(directory_path):
 
 
 def get_load_path(root, load_run=-1, checkpoint=-1):
-    def month_to_number(month):
-        return datetime.datetime.strptime(month, "%b").month
+    def _list_runs(run_root):
+        if not os.path.isdir(run_root):
+            return []
+        runs = []
+        for name in os.listdir(run_root):
+            if name == "exported":
+                continue
+            run_dir = os.path.join(run_root, name)
+            if os.path.isdir(run_dir):
+                runs.append(name)
+        # Prefer most recently modified runs to avoid brittle name parsing.
+        runs.sort(key=lambda n: os.path.getmtime(os.path.join(run_root, n)))
+        return runs
 
-    try:
-        runs = os.listdir(root)
-        try:
-            runs.sort(key=lambda x: (month_to_number(x[:3]), int(x[3:5]), x[6:]))
-        except ValueError as e:
-            print("WARNING - Could not sort runs by month: " + str(e))
-            runs.sort()
-        if "exported" in runs:
-            runs.remove("exported")
-        last_run = os.path.join(root, runs[-1])
-    except:
-        raise ValueError("No runs in this directory: " + root)
+    def _list_models(run_dir):
+        if not os.path.isdir(run_dir):
+            return []
+        models = [
+            file for file in os.listdir(run_dir)
+            if file.startswith("model_") and file.endswith(".pt")
+        ]
+        models.sort(key=lambda m: "{0:0>15}".format(m))
+        return models
+
+    runs = _list_runs(root)
+    if not runs:
+        raise ValueError(f"No runs in this directory: {root}")
+
     if load_run == -1:
-        load_run = last_run
+        # pick latest run that actually contains model files
+        selected_run = None
+        for run_name in reversed(runs):
+            run_dir = os.path.join(root, run_name)
+            if _list_models(run_dir):
+                selected_run = run_dir
+                break
+        if selected_run is None:
+            raise ValueError(
+                f"No model checkpoints found under any run in: {root}"
+            )
+        load_run = selected_run
     else:
         load_run = os.path.join(root, load_run)
+        if not os.path.isdir(load_run):
+            raise ValueError(f"Run directory does not exist: {load_run}")
+
     if checkpoint == -1:
-        models = [file for file in os.listdir(load_run) if "model" in file]
-        models.sort(key=lambda m: "{0:0>15}".format(m))
+        models = _list_models(load_run)
+        if not models:
+            raise ValueError(f"No model checkpoints found in run: {load_run}")
         model = models[-1]
     else:
-        model = "model_{}.pt".format(checkpoint)
+        model = f"model_{checkpoint}.pt"
+        model_path = os.path.join(load_run, model)
+        if not os.path.isfile(model_path):
+            raise ValueError(f"Checkpoint does not exist: {model_path}")
 
     load_path = os.path.join(load_run, model)
     return load_path
