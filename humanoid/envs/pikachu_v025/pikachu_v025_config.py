@@ -179,7 +179,7 @@ class PikachuCfg(LeggedRobotCfg):
             heading = [-3.14, 3.14]
 
     class rewards:
-        base_height_target = 0.25
+        base_height_target = 0.155
         # distance between 2 leg?
         min_dist = 0.1
         max_dist = 0.3

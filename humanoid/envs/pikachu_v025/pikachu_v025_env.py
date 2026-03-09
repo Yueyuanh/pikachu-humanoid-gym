@@ -250,6 +250,7 @@ class PikachuEnv(LeggedRobot):
 
     def compute_observations(self):
 
+
         phase = self._get_phase()
         self.compute_ref_state()
 
@@ -311,6 +312,12 @@ class PikachuEnv(LeggedRobot):
 
         self.obs_buf = obs_buf_all.reshape(self.num_envs, -1)  # N, T*K
         self.privileged_obs_buf = torch.cat([self.critic_history[i] for i in range(self.cfg.env.c_frame_stack)], dim=1)
+        # ================================================ Debugs ================================================== #
+        measured_heights = torch.sum(
+            self.rigid_state[:, self.feet_indices, 2] * stance_mask, dim=1) / torch.sum(stance_mask, dim=1)
+        base_height = self.root_states[:, 2] - (measured_heights - 0.05)
+        # print(base_height)
+
 
     def reset_idx(self, env_ids):
         super().reset_idx(env_ids)

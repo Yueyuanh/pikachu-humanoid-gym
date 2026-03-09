@@ -29,7 +29,7 @@
 #
 # Copyright (c) 2024 Beijing RobotEra TECHNOLOGY CO.,LTD. All rights reserved.
 
-
+import os
 from humanoid.envs import *
 from humanoid.utils import get_args, task_registry
 from humanoid.utils.helpers import launch_tensorboard
@@ -38,10 +38,9 @@ def train(args):
     env, env_cfg = task_registry.make_env(name=args.task, args=args)
     ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args)
     if args.launch_tensorboard:
-        if ppo_runner.log_dir is not None:
-            launch_tensorboard(ppo_runner.log_dir)
-        else:
-            print("[warning] TensorBoard was requested but logging is disabled (log_dir is None).")
+        log_root = os.path.join(LEGGED_GYM_ROOT_DIR, "logs", args.task)
+        launch_tensorboard(log_root)
+
     ppo_runner.learn(num_learning_iterations=train_cfg.runner.max_iterations, init_at_random_ep_len=True)
 
 if __name__ == '__main__':
