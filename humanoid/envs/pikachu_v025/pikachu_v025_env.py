@@ -555,8 +555,9 @@ class PikachuEnv(LeggedRobot):
         # Compute swing mask
         swing_mask = 1 - self._get_gait_phase()
 
-        # feet height should be closed to target feet height at the peak
-        rew_pos = torch.abs(self.feet_height - self.cfg.rewards.target_feet_height) < 0.01
+        # Continuous reward around target clearance (more stable than hard threshold).
+        height_err = self.feet_height - self.cfg.rewards.target_feet_height
+        rew_pos = torch.exp(-40.0 * torch.square(height_err))
         rew_pos = torch.sum(rew_pos * swing_mask, dim=1)
         self.feet_height *= ~contact
         return rew_pos
