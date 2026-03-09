@@ -318,6 +318,17 @@ class PikachuEnv(LeggedRobot):
         base_height = self.root_states[:, 2] - (measured_heights - 0.05)
         # print(base_height)
 
+        foot_pos = self.rigid_state[:, self.feet_indices, :2]
+        foot_dist = torch.norm(foot_pos[:, 0, :] - foot_pos[:, 1, :], dim=1)
+        # print(foot_dist)
+
+        feet_z = self.rigid_state[:, self.feet_indices, 2] - 0.05
+        delta_z = feet_z - self.last_feet_z
+        self.feet_height += delta_z
+        # print(self.feet_height)
+
+
+
 
     def reset_idx(self, env_ids):
         super().reset_idx(env_ids)
