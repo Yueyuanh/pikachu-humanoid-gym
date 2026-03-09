@@ -215,8 +215,8 @@ class PikachuCfg(LeggedRobotCfg):
             feet_clearance = 1.
             feet_contact_number = 1.2
             # gait
-            feet_air_time = 1.
-            foot_slip = -0.05
+            feet_air_time = 1.5
+            foot_slip = -0.15
             feet_distance = 0.2
             knee_distance = 0.2
             # contact
