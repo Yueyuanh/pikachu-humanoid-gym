@@ -255,6 +255,8 @@ class PikachuEnv(LeggedRobot):
     def compute_observations(self):
 
 
+
+
         phase = self._get_phase()
         self.compute_ref_state()
 
