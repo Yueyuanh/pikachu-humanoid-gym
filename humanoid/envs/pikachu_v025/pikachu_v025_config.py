@@ -53,7 +53,7 @@ class PikachuCfg(LeggedRobotCfg):
         debug = False
     class safety:
         # safety factors
-        pos_limit = 1.0
+        pos_limit = 0.9
         vel_limit = 1.0
         torque_limit = 0.85
 
@@ -236,7 +236,7 @@ class PikachuCfg(LeggedRobotCfg):
             track_vel_hard = 0.5 #0.5
             # base pos
             default_joint_pos = 0.1
-            orientation = 1.
+            orientation = 1.2
             base_height = 0.2
             base_acc = 0.2
             # energy
