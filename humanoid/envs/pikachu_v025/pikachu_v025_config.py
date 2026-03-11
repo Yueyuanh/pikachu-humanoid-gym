@@ -223,7 +223,7 @@ class PikachuCfg(LeggedRobotCfg):
             # gait
             feet_air_time = 1.5
             # 脚滑奖励（惩罚）
-            foot_slip = -0.3
+            foot_slip = -0.4
             feet_distance = 0.2
             knee_distance = 0.2
             # contact
