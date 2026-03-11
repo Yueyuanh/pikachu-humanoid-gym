@@ -261,7 +261,7 @@ class PikachuEnv(LeggedRobot):
             lin_vel_x = 0
             lin_vel_y = 0
             ang_vel = 0
-            command_scale=0.75
+            command_scale=0.5
             if keys[pygame.K_w]:
                 lin_vel_x = torch.tensor(self.command_ranges["lin_vel_x"][1])
             elif keys[pygame.K_s]:
@@ -292,7 +292,7 @@ class PikachuEnv(LeggedRobot):
             self.commands[:, 2] = 0 # ang_vel*command_scale
             self.commands[:, 3] = self.heading_target
             
-            print(self.commands[0])
+            # print(self.commands[0])
             pygame.event.pump()  # process event queue
 
         phase = self._get_phase()
@@ -401,6 +401,12 @@ class PikachuEnv(LeggedRobot):
         self.feet_height *= ~contact
         # return rew_pos
         # print(self.feet_height)
+
+        contact = self.contact_forces[:, self.feet_indices, 2] > self.cfg.env.foot_contact_force
+        foot_speed_norm = torch.norm(self.rigid_state[:, self.feet_indices, 7:9], dim=2)
+        rew = torch.sqrt(foot_speed_norm)
+        rew *= contact
+        print(rew)
 # ================================================ Debugs ================================================== #
 
     def reset_idx(self, env_ids):
@@ -465,35 +471,35 @@ class PikachuEnv(LeggedRobot):
         checking the first contact with the ground after being in the air. The air time is
         limited to a maximum value for reward calculation.
         """
-        # contact = self.contact_forces[:, self.feet_indices, 2] >  self.cfg.env.foot_contact_force
-        # stance_mask = self._get_gait_phase()
-        # self.contact_filt = torch.logical_or(torch.logical_or(contact, stance_mask), self.last_contacts)
-        # self.last_contacts = contact
-        # first_contact = (self.feet_air_time > 0.) * self.contact_filt
-        # self.feet_air_time += self.dt
-        # air_time = self.feet_air_time.clamp(0, 0.5) * first_contact
-        # self.feet_air_time *= ~self.contact_filt
-        # return air_time.sum(dim=1)
-
-
-        # 真实接触（不再混入期望相位）
         contact = self.contact_forces[:, self.feet_indices, 2] >  self.cfg.env.foot_contact_force
-
-        # 简单去抖：当前接触 or 上一帧接触
-        contact_filt = torch.logical_or(contact, self.last_contacts)
-
-        # 只在“从不接触 -> 接触”瞬间记 first_contact
-        first_contact = torch.logical_and(contact_filt, ~self.last_contacts)
-
+        stance_mask = self._get_gait_phase()
+        self.contact_filt = torch.logical_or(torch.logical_or(contact, stance_mask), self.last_contacts)
+        self.last_contacts = contact
+        first_contact = (self.feet_air_time > 0.) * self.contact_filt
         self.feet_air_time += self.dt
         air_time = self.feet_air_time.clamp(0, 0.5) * first_contact
-
-        # 接触后清零空中计时；离地继续累计
-        self.feet_air_time *= ~contact_filt
-
-        # 最后再更新上一帧接触
-        self.last_contacts = contact
+        self.feet_air_time *= ~self.contact_filt
         return air_time.sum(dim=1)
+
+
+        # # 真实接触（不再混入期望相位）
+        # contact = self.contact_forces[:, self.feet_indices, 2] >  self.cfg.env.foot_contact_force
+
+        # # 简单去抖：当前接触 or 上一帧接触
+        # contact_filt = torch.logical_or(contact, self.last_contacts)
+
+        # # 只在“从不接触 -> 接触”瞬间记 first_contact
+        # first_contact = torch.logical_and(contact_filt, ~self.last_contacts)
+
+        # self.feet_air_time += self.dt
+        # air_time = self.feet_air_time.clamp(0, 0.5) * first_contact
+
+        # # 接触后清零空中计时；离地继续累计
+        # self.feet_air_time *= ~contact_filt
+
+        # # 最后再更新上一帧接触
+        # self.last_contacts = contact
+        # return air_time.sum(dim=1)
 
     def _reward_feet_contact_number(self):
         """
