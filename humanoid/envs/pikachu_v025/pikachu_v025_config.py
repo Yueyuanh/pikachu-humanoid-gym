@@ -216,9 +216,9 @@ class PikachuCfg(LeggedRobotCfg):
             # reference motion tracking
             joint_pos = 5
             # 抬脚高度奖励
-            feet_clearance = 1
+            feet_clearance = 1.5
             # 每只脚接触顺序
-            feet_contact_number = 1
+            feet_contact_number = 1.5
             
             # gait
             feet_air_time = 1.5

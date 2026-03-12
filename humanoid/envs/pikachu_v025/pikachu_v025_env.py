@@ -530,6 +530,7 @@ class PikachuEnv(LeggedRobot):
         Calculates a reward based on the number of feet contacts aligning with the gait phase. 
         Rewards or penalizes depending on whether the foot contact matches the expected gait phase.
         """
+        
         contact = self.contact_forces[:, self.feet_indices, 2] >  self.cfg.env.foot_contact_force
         stance_mask = self._get_gait_phase()
         reward = torch.where(contact == stance_mask, 1.0, -0.3)
