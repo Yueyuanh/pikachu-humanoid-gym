@@ -114,10 +114,12 @@ class PikachuQuadEnv(LeggedRobot):
         self.left_yaw_roll_indices = (
             idx("left_hip_yaw_joint"),
             idx("left_hip_roll_joint"),
+            idx("left_arm_roll_joint"),
         )
         self.right_yaw_roll_indices = (
             idx("right_hip_yaw_joint"),
             idx("right_hip_roll_joint"),
+            idx("right_arm_roll_joint"),
         )
 
     def _validate_observation_dims(self):
@@ -371,7 +373,7 @@ class PikachuQuadEnv(LeggedRobot):
             measured_heights = torch.sum(
                 self.rigid_state[:, self.feet_indices, 2] * stance_mask, dim=1) / torch.sum(stance_mask, dim=1)
             base_height = self.root_states[:, 2] - (measured_heights - 0.05)
-            # print(base_height)
+            print(base_height)
 
             foot_pos = self.rigid_state[:, self.feet_indices, :2]
             foot_dist = torch.norm(foot_pos[:, 0, :] - foot_pos[:, 1, :], dim=1)
