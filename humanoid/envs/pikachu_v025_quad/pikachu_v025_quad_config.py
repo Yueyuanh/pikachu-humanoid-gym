@@ -60,7 +60,7 @@ class PikachuQuadCfg(LeggedRobotCfg):
         torque_limit = 0.85
 
     class asset(LeggedRobotCfg.asset):
-        file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/Pikachu_V025/urdf/Pikachu_V025_flat_18dof_quad.urdf'
+        file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/Pikachu_V025/urdf/Pikachu_V025_flat_14dof_quad.urdf'
 
         name = "Pikachu_V0025"
         foot_name = "ankle"
@@ -245,7 +245,7 @@ class PikachuQuadCfg(LeggedRobotCfg):
             contact_no_vel = -1
             feet_distance = 0.2
             knee_distance = 0.2
-            stand_still = -0.2
+            stand_still = -0.5
             # contact
             feet_contact_forces = -0.01
             # vel tracking
