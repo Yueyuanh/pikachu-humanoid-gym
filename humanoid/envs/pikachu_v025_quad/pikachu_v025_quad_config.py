@@ -245,15 +245,16 @@ class PikachuQuadCfg(LeggedRobotCfg):
             contact_no_vel = -1
             feet_distance = 0.2
             knee_distance = 0.2
-            stand_still = -0.5
             # contact
             feet_contact_forces = -0.01
             # vel tracking
-            tracking_lin_vel = 1.2
+            tracking_lin_vel = 1.5
             tracking_ang_vel = 1.1
             vel_mismatch_exp = 0.5  # lin_z; ang x,y
             low_speed = 0.2 #0.2
             track_vel_hard = 0.5 #0.5
+            stand_still = -0.05
+
             # base pos
             # default_joint_pos = 0.1
             default_joint_pos_left = 0.5
