@@ -42,9 +42,18 @@ from .pikachu_v025.pikachu_v025_config import (
     PikachuCfgPPO as PikachuV025CfgPPO,
 )
 from .pikachu_v025.pikachu_v025_env import PikachuEnv as PikachuV025Env
+
+from .pikachu_v025_quad.pikachu_v025_quad_config import (
+    PikachuQuadCfg,
+    PikachuQuadCfgPPO,
+)
+from .pikachu_v025_quad.pikachu_v025_quad_env import PikachuQuadEnv
+
+
 from humanoid.utils.task_registry import task_registry
 
 
 task_registry.register( "humanoid_ppo", XBotLFreeEnv, XBotLCfg(), XBotLCfgPPO() )
 task_registry.register( "Pikachu_V01", PikachuEnv, PikachuCfg(), PikachuCfgPPO() )
 task_registry.register( "Pikachu_V025", PikachuV025Env, PikachuV025Cfg(), PikachuV025CfgPPO() )
+task_registry.register( "Pikachu_V025_Quad", PikachuQuadEnv, PikachuQuadCfg(), PikachuQuadCfgPPO() )
