@@ -80,7 +80,9 @@ class PikachuQuadEnv(LeggedRobot):
         self._build_joint_index_cache()
         self._validate_observation_dims()
         self.last_feet_z = 0.05
+        self.last_hand_z = 0.05
         self.feet_height = torch.zeros((self.num_envs, 2), device=self.device)
+        self.hand_height = torch.zeros((self.num_envs, 2), device=self.device)
         self.reset_idx(torch.tensor(range(self.num_envs), device=self.device))
         self.compute_observations()
 
@@ -445,8 +447,23 @@ class PikachuQuadEnv(LeggedRobot):
 
             # hands
             contact_force = torch.norm(self.contact_forces[:, self.hand_indices, :], dim=-1)
-            hand_contact = self.contact_forces[:, self.hand_indices, 2] >  self.cfg.env.foot_contact_force
-            print(contact_force)
+            contact_force_z = self.contact_forces[:, self.hand_indices, 2]
+
+            hand_contact = self.contact_forces[:, self.hand_indices, 2] >  self.cfg.env.hand_contact_force
+            # print(contact_force_z)
+
+            feet_contact_mask = self._get_gait_phase()
+            hand_contact_mask = 1-self._get_gait_phase()
+            # print(f"feet contact mask: {feet_contact_mask} ")
+            # print(f"hand contact mask: {hand_contact_mask} ")
+
+
+            hands_z = self.rigid_state[:, self.hand_indices, 2] - 0.5
+            delta_z = hands_z - self.last_hand_z
+            self.hand_height += delta_z
+            self.last_hand_z = hands_z
+
+            # print(self.hand_height)
 # ================================================ Debugs ================================================== #
 
     def reset_idx(self, env_ids):
@@ -504,6 +521,18 @@ class PikachuQuadEnv(LeggedRobot):
         rew = torch.sqrt(foot_speed_norm)
         rew *= contact
         return torch.sum(rew, dim=1)    
+    
+    def _reward_hand_slip(self):
+        """
+        Calculates the reward for minimizing hand slip. The reward is based on the contact forces 
+        and the speed of the hands. A contact threshold is used to determine if the hand is in contact 
+        with the ground. The speed of the hand is calculated and scaled by the contact condition.
+        """
+        contact = self.contact_forces[:, self.hand_indices, 2] > self.cfg.env.hand_contact_force
+        hand_speed_norm = torch.norm(self.rigid_state[:, self.hand_indices, 7:9], dim=2)
+        rew = torch.sqrt(hand_speed_norm)
+        rew *= contact
+        return torch.sum(rew, dim=1)    
 
     def _reward_feet_air_time(self):
         """
@@ -549,6 +578,17 @@ class PikachuQuadEnv(LeggedRobot):
 
         contact = self.contact_forces[:, self.feet_indices, 2] >  self.cfg.env.foot_contact_force
         stance_mask = self._get_gait_phase()
+        reward = torch.where(contact == stance_mask, 1.0, -0.3)
+        return torch.mean(reward, dim=1)
+
+    def _reward_hand_contact_number(self):
+        """
+        Calculates a reward based on the number of hands contacts aligning with the gait phase. 
+        Rewards or penalizes depending on whether the hand contact matches the expected gait phase.
+        """
+
+        contact = self.contact_forces[:, self.hand_indices, 2] >  self.cfg.env.hand_contact_force
+        stance_mask = 1-self._get_gait_phase()
         reward = torch.where(contact == stance_mask, 1.0, -0.3)
         return torch.mean(reward, dim=1)
 
@@ -707,24 +747,28 @@ class PikachuQuadEnv(LeggedRobot):
         self.feet_height *= ~contact
         return rew_pos
 
-        # # Compute feet contact mask
-        # contact = self.contact_forces[:, self.feet_indices, 2] >  self.cfg.env.foot_contact_force
+    def _reward_hand_clearance(self):
+        """
+        Calculates reward based on the clearance of the swing leg from the ground during movement.
+        Encourages appropriate lift of the feet during the swing phase of the gait.
+        """
+        # Compute hands contact mask
+        contact = self.contact_forces[:, self.hand_indices, 2] >  self.cfg.env.hand_contact_force
 
-        # # Get the z-position of the feet and compute the change in z-position
-        # feet_z = self.rigid_state[:, self.feet_indices, 2] - 0.05
-        # delta_z = feet_z - self.last_feet_z
-        # self.feet_height += delta_z
-        # self.last_feet_z = feet_z
+        # Get the z-position of the hands and compute the change in z-position
+        hands_z = self.rigid_state[:, self.hand_indices, 2] - 0.05
+        delta_z = hands_z - self.last_hand_z
+        self.hand_height += delta_z
+        self.last_hand_z = hands_z
 
-        # # Compute swing mask
-        # swing_mask = 1 - self._get_gait_phase()
+        # Compute swing mask
+        swing_mask = self._get_gait_phase()
 
-        # # Continuous reward around target clearance (more stable than hard threshold).
-        # height_err = self.feet_height - self.cfg.rewards.target_feet_height
-        # rew_pos = torch.exp(-40.0 * torch.square(height_err))
-        # rew_pos = torch.sum(rew_pos * swing_mask, dim=1)
-        # self.feet_height *= ~contact
-        # return rew_pos
+        # hands height should be closed to target hands height at the peak
+        rew_pos = torch.abs(self.hand_height - self.cfg.rewards.target_hand_height) < 0.01
+        rew_pos = torch.sum(rew_pos * swing_mask, dim=1)
+        self.hand_height *= ~contact
+        return rew_pos
 
     def _reward_low_speed(self):
         """

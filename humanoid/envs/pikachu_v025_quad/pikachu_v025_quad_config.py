@@ -48,6 +48,7 @@ class PikachuQuadCfg(LeggedRobotCfg):
         episode_length_s = 24     # episode length in seconds
         use_ref_actions = False   # speed up training by using reference actions
         foot_contact_force=3.0  # contact force threshold for foot-ground contact
+        hand_contact_force=3.0  # contact force threshold for hand-ground contact
         base_vel_lpf = 0.9
 
         get_commands_from_keyboard = False
@@ -234,11 +235,13 @@ class PikachuQuadCfg(LeggedRobotCfg):
             feet_clearance = 2
             # 每只脚接触顺序
             feet_contact_number = 2
-            
+            hand_contact_number = 2
             # gait
             feet_air_time = 1.5
             # 脚滑奖励（惩罚）
             foot_slip = -0.8
+            hand_slip = -0.8
+
             contact_no_vel = -1
             feet_distance = 0.2
             knee_distance = 0.2
