@@ -121,7 +121,7 @@ def _build_ref_traj(cfg, dof_names, seconds, dt, cycle_time_override, scale_over
         else float(cfg.rewards.target_joint_pos_scale)
     )
     scale_2 = 2.0 * scale_1
-    scale_3 = 0.5 * scale_1
+    scale_3 = 2.0 * scale_1
     left_sign = float(getattr(cfg.rewards, "left_ref_sign", 1.0))
     right_sign = float(getattr(cfg.rewards, "right_ref_sign", 1.0))
 
