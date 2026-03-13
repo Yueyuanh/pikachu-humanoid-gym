@@ -293,6 +293,7 @@ def _simulate_ref_motion(
     base_lift=0.5,
     loop=True,
     collect_actual=False,
+    debug=False,
 ):
     from isaacgym import gymapi
 
@@ -388,6 +389,16 @@ def _simulate_ref_motion(
     start_pose.p = gymapi.Vec3(float(cfg.init_state.pos[0]), float(cfg.init_state.pos[1]), base_z)
     actor = gym.create_actor(env, asset, start_pose, cfg.asset.name, 0, int(cfg.asset.self_collisions), 0)
 
+    # Debug: pre-compute body / dof indices and state buffers.
+    if debug:
+        _body_names = list(gym.get_asset_rigid_body_names(asset))
+        _foot_name = getattr(cfg.asset, "foot_name", "ankle")
+        _knee_name = getattr(cfg.asset, "knee_name", "knee")
+        _feet_body_idx = [i for i, n in enumerate(_body_names) if _foot_name in n]
+        _knee_body_idx = [i for i, n in enumerate(_body_names) if _knee_name in n]
+        print(f"[debug] body_names={_body_names}")
+        print(f"[debug] feet_body_idx={_feet_body_idx}  knee_body_idx={_knee_body_idx}")
+
     asset_dof_names = gym.get_asset_dof_names(asset)
     asset_dof_names = list(asset_dof_names)
     src_dof_names = list(data.get("dof_names", dof_names))
@@ -428,6 +439,18 @@ def _simulate_ref_motion(
     default_pos = np.zeros(len(dof_names), dtype=np.float32)
     for i, joint_name in enumerate(dof_names):
         default_pos[i] = float(default_joint_angles.get(joint_name, 0.0))
+
+    # Debug: yaw/roll dof indices (finalised after dof_names is resolved).
+    if debug:
+        _left_yr_idx = [i for i, n in enumerate(dof_names)
+                        if n.startswith("left_") and any(k in n for k in ("yaw", "roll"))]
+        _right_yr_idx = [i for i, n in enumerate(dof_names)
+                         if n.startswith("right_") and any(k in n for k in ("yaw", "roll"))]
+        print(f"[debug] left_yaw_roll_dofs ={[dof_names[i] for i in _left_yr_idx]}")
+        print(f"[debug] right_yaw_roll_dofs={[dof_names[i] for i in _right_yr_idx]}")
+        _dbg_last_feet_z: np.ndarray | None = None
+        _dbg_feet_height = np.zeros(len(_feet_body_idx), dtype=np.float32)
+        _dbg_foot_contact_thr = float(getattr(cfg.env, "foot_contact_force", 3.0))
 
     dof_state = gym.get_actor_dof_states(env, actor, gymapi.STATE_ALL)
     dof_state["pos"][:] = default_pos
@@ -470,6 +493,92 @@ def _simulate_ref_motion(
             states = gym.get_actor_dof_states(env, actor, gymapi.STATE_POS)
             actual_pos.append(np.array(states["pos"], dtype=np.float32))
             actual_t.append(i * policy_dt)
+
+        if debug:
+            bs = gym.get_actor_rigid_body_states(env, actor, gymapi.STATE_ALL)
+            ds = gym.get_actor_dof_states(env, actor, gymapi.STATE_ALL)
+
+            # base_height: base z − (average stance-foot z − 0.05)
+            base_body_z = float(bs["pose"]["p"]["z"][0])
+            feet_zs = np.array([float(bs["pose"]["p"]["z"][fi]) for fi in _feet_body_idx],
+                                dtype=np.float32)
+            sin_val = float(data["sin_pos"][idx])
+            # left foot stance when sin >= 0, right foot stance when sin < 0
+            stance_mask = np.array([sin_val >= 0.0, sin_val < 0.0])
+            measured_h = float(np.mean(feet_zs[stance_mask[:len(feet_zs)]]) if np.any(stance_mask) else np.mean(feet_zs))
+            base_height = base_body_z - (measured_h - 0.05)
+            print(base_height)
+
+            # foot_dist: XY distance between the two foot bodies
+            if len(_feet_body_idx) >= 2:
+                foot_xy = np.array([[float(bs["pose"]["p"]["x"][fi]),
+                                     float(bs["pose"]["p"]["y"][fi])]
+                                    for fi in _feet_body_idx[:2]])
+                foot_dist = float(np.linalg.norm(foot_xy[0] - foot_xy[1]))
+                # print(foot_dist)
+
+            # feet_height: accumulated swing height (reset on contact)
+            feet_z_now = feet_zs - 0.05
+            if _dbg_last_feet_z is not None:
+                _dbg_feet_height += feet_z_now - _dbg_last_feet_z
+            _dbg_last_feet_z = feet_z_now.copy()
+            # print(_dbg_feet_height)
+
+            # knee_dist: XY distance between knee bodies
+            if len(_knee_body_idx) >= 2:
+                knee_xy = np.array([[float(bs["pose"]["p"]["x"][ki]),
+                                     float(bs["pose"]["p"]["y"][ki])]
+                                    for ki in _knee_body_idx[:2]])
+                knee_dist = float(np.linalg.norm(knee_xy[0] - knee_xy[1]))
+                # print(knee_dist)
+
+            # contact_force: net contact force magnitude on foot bodies
+            try:
+                all_forces = gym.get_actor_net_contact_forces(env, actor)
+                contact_force = np.array([float(np.linalg.norm(all_forces[fi, :3]))
+                                          for fi in _feet_body_idx], dtype=np.float32)
+            except Exception:
+                contact_force = np.zeros(len(_feet_body_idx), dtype=np.float32)
+            # print(contact_force)
+
+            # stance_mask vs contact_mask → contact reward
+            contact_mask = contact_force > _dbg_foot_contact_thr
+            reward = np.where(contact_mask == stance_mask[:len(contact_mask)], 1.0, -0.3)
+            # print(stance_mask)
+            # print(contact_mask)
+            # print(np.mean(reward))
+
+            # swing clearance: feet_height relative to target
+            swing_mask = ~stance_mask[:len(_dbg_feet_height)]
+            target_h = float(getattr(cfg.rewards, "target_feet_height", 0.02))
+            rew_pos = (np.abs(_dbg_feet_height - target_h) < 0.01).astype(float) * swing_mask
+            _dbg_feet_height *= ~contact_mask  # reset on contact
+            # print(_dbg_feet_height)
+
+            # foot_slip: sqrt(XY speed) weighted by contact
+            foot_vxy = np.array([[float(bs["vel"]["linear"]["x"][fi]),
+                                   float(bs["vel"]["linear"]["y"][fi])]
+                                  for fi in _feet_body_idx], dtype=np.float32)
+            foot_speed_norm = np.linalg.norm(foot_vxy, axis=1)
+            rew_slip = np.sqrt(foot_speed_norm) * contact_mask
+            # print(rew_slip)
+
+            # yaw/roll joint deviation
+            actual_dof = np.array(ds["pos"], dtype=np.float32)
+            joint_diff = actual_dof - default_pos
+            left_yr = joint_diff[_left_yr_idx]
+            right_yr = joint_diff[_right_yr_idx]
+            yaw_roll = float(np.linalg.norm(left_yr) + np.linalg.norm(right_yr))
+            yaw_roll_c = float(np.clip(yaw_roll - 0.1, 0.0, 50.0))
+            # print(left_yr)
+            # print(right_yr)
+            # print(yaw_roll_c)
+
+            left_error = float(np.mean(np.abs(left_yr))) if len(left_yr) > 0 else 0.0
+            right_error = float(np.mean(np.abs(right_yr))) if len(right_yr) > 0 else 0.0
+            # print("left:", left_error)
+            # print("right:", right_error)
+
         i += 1
 
     if viewer is not None:
@@ -533,6 +642,11 @@ def main():
         action="store_true",
         help="play trajectory once (default is loop forever until viewer is closed)",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="print per-step debug metrics (base_height, feet_z, contact, yaw/roll error, etc.)",
+    )
     args = parser.parse_args()
 
     env_cfg = _get_env_cfg_by_task(args.task)
@@ -574,6 +688,7 @@ def main():
             base_lift=args.base_lift,
             loop=(not args.no_loop),
             collect_actual=(args.mode == "both"),
+            debug=args.debug,
         )
     if args.mode in ("plot", "both"):
         _plot_ref(data, actual_data=actual_data)

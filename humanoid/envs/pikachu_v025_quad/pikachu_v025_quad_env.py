@@ -373,7 +373,7 @@ class PikachuQuadEnv(LeggedRobot):
             measured_heights = torch.sum(
                 self.rigid_state[:, self.feet_indices, 2] * stance_mask, dim=1) / torch.sum(stance_mask, dim=1)
             base_height = self.root_states[:, 2] - (measured_heights - 0.05)
-            # print(base_height)
+            print(base_height)
 
             foot_pos = self.rigid_state[:, self.feet_indices, :2]
             foot_dist = torch.norm(foot_pos[:, 0, :] - foot_pos[:, 1, :], dim=1)
@@ -382,7 +382,7 @@ class PikachuQuadEnv(LeggedRobot):
             feet_z = self.rigid_state[:, self.feet_indices, 2] - 0.05
             delta_z = feet_z - self.last_feet_z
             self.feet_height += delta_z
-            print(self.feet_height)
+            # print(self.feet_height)
 
             foot_pos = self.rigid_state[:, self.knee_indices, :2]
             foot_dist = torch.norm(foot_pos[:, 0, :] - foot_pos[:, 1, :], dim=1)
